@@ -21,3 +21,4 @@ endif
 
 setlocal omnifunc=ijaas#complete
 command! -buffer OrganizeImport call ijaas#organize_import()
+command! -buffer LoadWarnings call ijaas#buf_write_post()
