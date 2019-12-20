@@ -28,7 +28,7 @@ function! ijaas#call(method, params) abort
   let l:response = ch_evalexpr(
         \ s:ch,
         \ {'method': a:method, 'params': a:params},
-        \ {'timeout': 3 * 1000})
+        \ {'timeout': 10 * 1000})
   if type(l:response) != type({})
     throw 'ijaas: Timeout'
   endif
