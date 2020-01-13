@@ -13,7 +13,7 @@
 // limitations under the License.
 
 plugins {
-  id 'org.jetbrains.intellij' version '0.4.10'
+  id 'org.jetbrains.intellij' version '0.4.15'
   id 'com.github.sherter.google-java-format' version '0.8'
 }
 apply plugin: 'java'
@@ -30,17 +30,18 @@ sourceSets {
 }
 
 dependencies {
-  compile 'com.google.guava:guava:28.1-jre'
-  compile 'com.google.code.gson:gson:2.8.5'
+  compile 'com.google.guava:guava:28.2-jre'
+  compile 'com.google.code.gson:gson:2.8.6'
 }
 
-def intellijVersion = 'IC-2019.1.2'
+def intellijVersion = 'IC-2019.3.1'
 if (project.hasProperty('intellij.version')) {
   intellijVersion = getProperty('intellij.version')
 }
 
 intellij {
   version intellijVersion
+  plugins 'java'
 }
 
 patchPluginXml {
