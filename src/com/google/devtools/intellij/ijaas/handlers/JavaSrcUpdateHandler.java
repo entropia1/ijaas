@@ -30,6 +30,7 @@ import com.intellij.codeInspection.ex.Tools;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectLocator;
 import com.intellij.openapi.util.Ref;
@@ -66,7 +67,7 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
             throw new RuntimeException("Cannot find the file");
           }
           vfRef.set(vf);
-        });
+        }, ModalityState.NON_MODAL);
     VirtualFile vf = vfRef.get();
 
     Ref<Project> projectRef = new Ref<>();
@@ -98,7 +99,7 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
               });
           codeSmellInfosRef.set(
               CodeSmellDetector.getInstance(project).findCodeSmells(ImmutableList.of(vf)));
-        });
+        },ModalityState.NON_MODAL);
 
     application.runReadAction(
         () -> {

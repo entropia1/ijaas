@@ -64,7 +64,7 @@ public class IjaasServer {
                   executorService.execute(() -> process(socket));
                 }
               } catch (IOException e) {
-                throw new RuntimeException(e);
+                e.printStackTrace();
               }
             })
         .start();

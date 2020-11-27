@@ -26,7 +26,9 @@ import com.intellij.codeInsight.completion.impl.CompletionServiceImpl;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementPresentation;
 import com.intellij.codeInsight.lookup.impl.LookupImpl;
+import com.intellij.lang.Language;
 import com.intellij.lang.java.JavaLanguage;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.CommandProcessor;
@@ -68,11 +70,13 @@ public class JavaCompleteHandler extends BaseHandler<Request, Response> {
     SettableFuture<Response> responseFuture = SettableFuture.create();
     Application application = ApplicationManager.getApplication();
     Ref<PsiFile> psiFileRef = new Ref<>();
+    Language kotlinLanguage = Language.findLanguageByID("kotlin");
+    Language language = (request.file != null && request.file.endsWith(".kt")) ? kotlinLanguage : JavaLanguage.INSTANCE;
     application.runReadAction(
         () -> {
           psiFileRef.set(
               PsiFileFactory.getInstance(project)
-                  .createFileFromText(JavaLanguage.INSTANCE, request.text));
+                  .createFileFromText(language, request.text));
         });
     PsiFile psiFile = psiFileRef.get();
 
@@ -138,7 +142,7 @@ public class JavaCompleteHandler extends BaseHandler<Request, Response> {
                   },
                   null,
                   null);
-        });
+        }, ModalityState.NON_MODAL);
     try {
       Response response = responseFuture.get();
       Collections.sort(response.completions, new CompletionOrdering());
