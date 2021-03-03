@@ -28,9 +28,9 @@ import com.intellij.codeInsight.lookup.LookupElementPresentation;
 import com.intellij.codeInsight.lookup.impl.LookupImpl;
 import com.intellij.lang.Language;
 import com.intellij.lang.java.JavaLanguage;
-import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.EditorFactory;
@@ -49,13 +49,17 @@ import com.intellij.psi.PsiKeyword;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiVariable;
 import java.io.File;
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
 public class JavaCompleteHandler extends BaseHandler<Request, Response> {
+
   @Override
   protected Class<Request> requestClass() {
     return Request.class;
@@ -71,12 +75,14 @@ public class JavaCompleteHandler extends BaseHandler<Request, Response> {
     Application application = ApplicationManager.getApplication();
     Ref<PsiFile> psiFileRef = new Ref<>();
     Language kotlinLanguage = Language.findLanguageByID("kotlin");
-    Language language = (request.file != null && request.file.endsWith(".kt")) ? kotlinLanguage : JavaLanguage.INSTANCE;
+    Language language =
+        (request.file != null && request.file.endsWith(".kt"))
+            ? kotlinLanguage
+            : JavaLanguage.INSTANCE;
     application.runReadAction(
         () -> {
           psiFileRef.set(
-              PsiFileFactory.getInstance(project)
-                  .createFileFromText(language, request.text));
+              PsiFileFactory.getInstance(project).createFileFromText(language, request.text));
         });
     PsiFile psiFile = psiFileRef.get();
 
@@ -142,15 +148,18 @@ public class JavaCompleteHandler extends BaseHandler<Request, Response> {
                   },
                   null,
                   null);
-        }, ModalityState.NON_MODAL);
+        },
+        ModalityState.NON_MODAL);
     try {
-      Response response = responseFuture.get();
+      Response response = responseFuture.get(1, TimeUnit.SECONDS);
       Collections.sort(response.completions, new CompletionOrdering());
       return response;
     } catch (ExecutionException e) {
       throw new RuntimeException(e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    } catch (TimeoutException e) {
       throw new RuntimeException(e);
     }
   }
@@ -174,16 +183,19 @@ public class JavaCompleteHandler extends BaseHandler<Request, Response> {
   }
 
   public static class Request {
+
     String file;
     String text;
     int offset;
   }
 
   public static class Response {
+
     ArrayList<Completion> completions = new ArrayList<>();
   }
 
   public class Completion {
+
     public static final String VARIABLE = "v";
     public static final String FUNCTION = "f";
     public static final String TYPE = "t";
@@ -195,6 +207,7 @@ public class JavaCompleteHandler extends BaseHandler<Request, Response> {
   }
 
   private static class CompletionOrdering extends Ordering<Completion> {
+
     @Override
     public int compare(Completion arg0, Completion arg1) {
       boolean arg0Keyword = arg0.kind.equals(Completion.KEYWORD);

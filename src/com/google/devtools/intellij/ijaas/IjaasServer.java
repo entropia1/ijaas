@@ -24,6 +24,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonIOException;
 import com.google.gson.JsonStreamParser;
 import com.google.gson.stream.JsonWriter;
+import com.intellij.openapi.progress.ProgressManager;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.EOFException;
@@ -37,6 +38,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
 import javax.annotation.Nullable;
 
 public class IjaasServer {
@@ -92,9 +94,15 @@ public class IjaasServer {
             try {
               response = gson.toJsonTree(new GenericResponse(processRequest(genericRequest)));
             } catch (Exception e) {
-              response =
-                  gson.toJsonTree(
-                      new ErrorResponse(e.getMessage(), Throwables.getStackTraceAsString(e)));
+              if (e.getCause() != null && e.getCause() instanceof TimeoutException) {
+                response =
+                    gson.toJsonTree(
+                        new ErrorResponse(e.getMessage(), ""));
+              } else {
+                response =
+                    gson.toJsonTree(
+                        new ErrorResponse(e.getMessage(), Throwables.getStackTraceAsString(e)));
+              }
             }
             writer.beginArray();
             writer.value(id);

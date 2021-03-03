@@ -16,10 +16,12 @@ package com.google.devtools.intellij.ijaas.handlers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.intellij.ijaas.BaseHandler;
 import com.google.devtools.intellij.ijaas.handlers.JavaSrcUpdateHandler.Request;
 import com.google.devtools.intellij.ijaas.handlers.JavaSrcUpdateHandler.Response;
 import com.intellij.codeInsight.CodeSmellInfo;
+import com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator;
 import com.intellij.codeInspection.GlobalInspectionContext;
 import com.intellij.codeInspection.InspectionEngine;
 import com.intellij.codeInspection.InspectionManager;
@@ -31,6 +33,7 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectLocator;
 import com.intellij.openapi.util.Ref;
@@ -41,11 +44,16 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.profile.codeInspection.InspectionProfileManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
+import io.netty.util.Timeout;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
+
   @Override
   protected Class<Request> requestClass() {
     return Request.class;
@@ -67,7 +75,8 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
             throw new RuntimeException("Cannot find the file");
           }
           vfRef.set(vf);
-        }, ModalityState.NON_MODAL);
+        },
+        ModalityState.NON_MODAL);
     VirtualFile vf = vfRef.get();
 
     Ref<Project> projectRef = new Ref<>();
@@ -90,19 +99,35 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
     PsiFile psiFile = psiFileRef.get();
 
     Ref<List<CodeSmellInfo>> codeSmellInfosRef = new Ref<>();
-    application.invokeAndWait(
+    final SettableFuture<Void> fileReloadDone = SettableFuture.create();
+    application.invokeLater(
         () -> {
           application.runWriteAction(
               () -> {
                 vf.refresh(false, false);
                 PsiManager.getInstance(project).reloadFromDisk(psiFile);
               });
-          codeSmellInfosRef.set(
-              CodeSmellDetector.getInstance(project).findCodeSmells(ImmutableList.of(vf)));
-        },ModalityState.NON_MODAL);
+          fileReloadDone.set(null);
+        },
+        ModalityState.NON_MODAL);
+
+    try {
+      fileReloadDone.get(1, TimeUnit.SECONDS);
+    } catch (ExecutionException | TimeoutException e) {
+      throw new RuntimeException(e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    }
 
     application.runReadAction(
         () -> {
+          codeSmellInfosRef.set(
+              CodeSmellDetector.getInstance(project).findCodeSmells(ImmutableList.of(vf)));
+
+          DaemonProgressIndicator indicator = new DaemonProgressIndicator();
+          indicator.start();
+          ProgressManager.getInstance().runProcess(() -> {
           for (CodeSmellInfo codeSmellInfo : codeSmellInfosRef.get()) {
             Problem problem = new Problem();
             problem.lnum = codeSmellInfo.getStartLine() + 1;
@@ -129,7 +154,7 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
               problem.type = toProblemType(desc.getHighlightType());
               response.problems.add(problem);
             }
-          }
+          }}, indicator);
         });
     response.problems.sort(new ProblemOrdering());
     return response;
@@ -157,14 +182,17 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
   }
 
   public static class Request {
+
     String file;
   }
 
   public static class Response {
+
     List<Problem> problems = new ArrayList<>();
   }
 
   public class Problem {
+
     // Quickfix type characters
     // https://github.com/vim/vim/blob/3653822546fb0f1005c32bb5b70dc9bfacdfc954/src/quickfix.c#L2871
     public static final String INFO = "I";
@@ -177,6 +205,7 @@ public class JavaSrcUpdateHandler extends BaseHandler<Request, Response> {
   }
 
   private static class ProblemOrdering extends Ordering<Problem> {
+
     private static final ImmutableMap<String, Integer> SEVERITY_ORDER =
         ImmutableMap.of(
             Problem.INFO, 2,

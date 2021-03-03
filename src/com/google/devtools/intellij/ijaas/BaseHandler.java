@@ -39,7 +39,7 @@ public abstract class BaseHandler<ReqT, ResT> implements IjaasHandler {
     ProgressManager.getInstance()
         .run(
             new Task.Backgroundable(
-                null, this.getClass().getCanonicalName(), true, PerformInBackgroundOption.DEAF) {
+                null, this.getClass().getCanonicalName(), true, PerformInBackgroundOption.ALWAYS_BACKGROUND) {
               @Override
               public void run(ProgressIndicator indicator) {
                 indicatorRef.set(indicator);
@@ -50,11 +50,18 @@ public abstract class BaseHandler<ReqT, ResT> implements IjaasHandler {
                 } catch (Exception e) {
                   ret.setException(new RuntimeException("Validation error", e));
                 }
-                ret.set(gson.toJsonTree(handle(request)));
+                try {
+                  ret.set(gson.toJsonTree(handle(request)));
+                } catch (RuntimeException e) {
+                  if (e.getCause() != null)
+                    ret.setException(e.getCause());
+                  else
+                    ret.setException(e);
+                }
               }
             });
     try {
-      return ret.get(10, TimeUnit.SECONDS);
+      return ret.get(30, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new RuntimeException(e);
